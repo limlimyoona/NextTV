@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { MovieCard } from "../components/MovieCard";
+import { ContinueWatching } from "../components/ContinueWatching";
+import { usePlayHistoryStore } from "../store/usePlayHistoryStore";
 import {
   fetchRecommendations,
   loadUserTags,
@@ -24,6 +26,9 @@ export default function Home() {
   const [tvTags, setTvTags] = useState([]);
   const [showTagModal, setShowTagModal] = useState(false);
   const pageSize = 12;
+
+  // 获取播放记录
+  const playHistory = usePlayHistoryStore((state) => state.playHistory);
 
   useEffect(() => {
     const { movieTags: loadedMovieTags, tvTags: loadedTvTags } = loadUserTags();
@@ -282,6 +287,11 @@ export default function Home() {
           </div>
         )}
       </div>
+
+      {/* Continue Watching Section */}
+      {playHistory && playHistory.length > 0 && (
+        <ContinueWatching playHistory={playHistory} />
+      )}
 
       {/* Tag Management Modal */}
       {showTagModal && (

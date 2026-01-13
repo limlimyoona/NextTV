@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Player } from "../../../components/Artplayer";
 import { getVideoDetail } from "../../../lib/api";
 import { useSettingsStore } from "../../../store/useSettingsStore";
+import { usePlayHistoryStore } from "../../../store/usePlayHistoryStore";
 
 export default function PlayerPage() {
   const params = useParams();
@@ -21,6 +22,14 @@ export default function PlayerPage() {
 
   // 播放器引用
   const playerRef = useRef(null);
+
+  // 播放记录store
+  const addPlayRecord = usePlayHistoryStore((state) => state.addPlayRecord);
+  const getPlayRecord = usePlayHistoryStore((state) => state.getPlayRecord);
+
+  // 保存播放进度的间隔引用
+  const saveIntervalRef = useRef(null);
+  const lastSaveTimeRef = useRef(0);
 
   // 获取视频详情
   useEffect(() => {
@@ -163,6 +172,109 @@ export default function PlayerPage() {
       document.removeEventListener("keydown", handleKeyboardShortcuts);
     };
   }, [handleKeyboardShortcuts]);
+
+  // 保存播放进度函数
+  const savePlayProgress = useCallback(() => {
+    if (!playerRef.current || !videoDetail || !id || !source) return;
+
+    const currentTime = playerRef.current.currentTime || 0;
+    const duration = playerRef.current.duration || 0;
+
+    // 如果播放时间太短或者视频时长无效，不保存
+    if (currentTime < 1 || !duration) return;
+
+    try {
+      addPlayRecord({
+        source,
+        id,
+        title: videoDetail.title,
+        poster: videoDetail.poster,
+        year: videoDetail.year,
+        currentEpisodeIndex,
+        totalEpisodes: videoDetail.episodes?.length || 1,
+        currentTime,
+        duration,
+      });
+      console.log("播放进度已保存:", {
+        title: videoDetail.title,
+        episode: currentEpisodeIndex + 1,
+        progress: `${Math.floor(currentTime)}/${Math.floor(duration)}`,
+      });
+    } catch (err) {
+      console.error("保存播放进度失败:", err);
+    }
+  }, [playerRef, videoDetail, id, source, currentEpisodeIndex, addPlayRecord]);
+
+  // 恢复播放进度
+  useEffect(() => {
+    if (!videoDetail || !id || !source) return;
+
+    const playRecord = getPlayRecord(source, id);
+    if (playRecord && playRecord.currentEpisodeIndex === currentEpisodeIndex) {
+      // 如果有播放记录且集数匹配，保存到引用中，在播放器准备好后恢复
+      const targetTime = playRecord.currentTime;
+      if (targetTime > 5 && playerRef.current) {
+        // 延迟执行，确保播放器已经加载好视频
+        const timer = setTimeout(() => {
+          if (playerRef.current && playerRef.current.duration > 0) {
+            playerRef.current.currentTime = targetTime;
+            playerRef.current.notice.show = `已恢复到 ${Math.floor(targetTime / 60)}:${String(
+              Math.floor(targetTime % 60)
+            ).padStart(2, "0")}`;
+            console.log("已恢复播放进度:", targetTime);
+          }
+        }, 1000);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [videoDetail, id, source, currentEpisodeIndex, getPlayRecord, playerRef]);
+
+  // 定期保存播放进度
+  useEffect(() => {
+    if (!playerRef.current) return;
+
+    // 监听时间更新事件，每5秒保存一次
+    const handleTimeUpdate = () => {
+      const now = Date.now();
+      if (now - lastSaveTimeRef.current > 5000) {
+        savePlayProgress();
+        lastSaveTimeRef.current = now;
+      }
+    };
+
+    // 监听暂停事件，立即保存
+    const handlePause = () => {
+      savePlayProgress();
+    };
+
+    // 添加事件监听
+    const art = playerRef.current;
+    art.on("video:timeupdate", handleTimeUpdate);
+    art.on("pause", handlePause);
+
+    return () => {
+      // 清理事件监听
+      if (art && art.on) {
+        art.off("video:timeupdate", handleTimeUpdate);
+        art.off("pause", handlePause);
+      }
+      // 组件卸载时保存进度
+      savePlayProgress();
+    };
+  }, [savePlayProgress]);
+
+  // 页面卸载前保存播放进度
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      savePlayProgress();
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      savePlayProgress();
+    };
+  }, [savePlayProgress]);
 
   // 计算当前剧集信息（放在条件返回之前以保证 Hooks 顺序一致）
   const currentEpisodeUrl = videoDetail?.episodes?.[currentEpisodeIndex] || "";
