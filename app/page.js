@@ -225,7 +225,7 @@ export default function Home() {
             </button>
           ))}
         </div>
-        <div className="absolute right-0 top-0 bottom-0 w-24 bg-gradient-to-l from-background-light to-transparent pointer-events-none"></div>
+        <div className="absolute right-0 top-0 bottom-0 w-24 bg-linear-to-l from-background-light to-transparent pointer-events-none"></div>
       </div>
 
       {/* Popular Section */}

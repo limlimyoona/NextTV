@@ -8,10 +8,20 @@ export const MovieCard = ({ movie }) => {
     /img\d+\.doubanio\.com/g,
     "img.doubanio.cmliussss.com"
   );
+
+  const handleClick = () => {
+    // 如果有 source 信息（从 API 搜索来的），则传递 source 参数
+    if (movie.source) {
+      router.push(`/play/${movie.id}?source=${movie.source}`);
+    } else {
+      router.push(`/play/${movie.id}`);
+    }
+  };
+
   return (
     <div
       className="group relative flex flex-col gap-3 cursor-pointer"
-      onClick={() => router.push(`/play/${movie.id}`)}
+      onClick={handleClick}
     >
       <div className="relative w-full aspect-[2/3] overflow-hidden rounded-xl bg-white shadow-md ring-1 ring-gray-200 transition-all duration-300 group-hover:scale-105 group-hover:shadow-lg group-hover:ring-primary/50">
         <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-md text-white text-xs font-bold px-2 py-1 rounded-md flex items-center gap-1 z-10">
@@ -33,6 +43,13 @@ export const MovieCard = ({ movie }) => {
             立即观看
           </button>
         </div>
+        {movie.source_name && (
+          <div className="absolute bottom-2 left-2 z-10">
+            <span className="bg-primary/90 text-white text-xs px-2 py-1 rounded-md font-medium shadow-sm">
+              {movie.source_name}
+            </span>
+          </div>
+        )}
         {movie.doubanUrl && (
           <div className="absolute bottom-2 right-2 z-10">
             <a

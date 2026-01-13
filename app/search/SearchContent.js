@@ -4,24 +4,68 @@ import { useState, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { MovieCard } from '../../components/MovieCard';
 import { Pagination } from '../../components/Pagination';
-import { SEARCH_RESULTS } from '../../lib/constants';
+import { useSettingsStore } from '../../store/useSettingsStore';
+import { searchVideos } from '../../lib/api';
 
 export default function SearchContent() {
   const searchParams = useSearchParams();
   const query = searchParams.get('q') || '';
   const router = useRouter();
   const [inputValue, setInputValue] = useState(query);
+  const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [mediaType, setMediaType] = useState('all'); // 'all', 'movie', 'tv'
+  const videoSources = useSettingsStore((state) => state.videoSources);
 
   useEffect(() => {
     setInputValue(query);
   }, [query]);
 
+  // 执行搜索
+  useEffect(() => {
+    async function performSearch() {
+      if (!query || !query.trim()) {
+        setResults([]);
+        return;
+      }
+
+      setLoading(true);
+      setError(null);
+
+      try {
+        const searchResults = await searchVideos(query, videoSources);
+        setResults(searchResults);
+
+        if (searchResults.length === 0) {
+          setError('未找到相关结果，请尝试其他关键词');
+        }
+      } catch (err) {
+        console.error('搜索错误:', err);
+        setError('搜索失败，请稍后重试');
+        setResults([]);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    performSearch();
+  }, [query, videoSources]);
+
   const handleSearch = (e) => {
     e.preventDefault();
-    router.push(`/search?q=${encodeURIComponent(inputValue)}`);
+    if (inputValue && inputValue.trim()) {
+      router.push(`/search?q=${encodeURIComponent(inputValue)}`);
+    }
   };
 
-  const results = SEARCH_RESULTS.filter(m => m.title.includes(query) || query === '七根心简');
+  // 根据媒体类型过滤结果
+  const filteredResults = results.filter(result => {
+    if (mediaType === 'all') return true;
+    if (mediaType === 'movie') return result.type === 'movie';
+    if (mediaType === 'tv') return result.type === 'tv';
+    return true;
+  });
 
   return (
     <div className="w-full max-w-7xl flex flex-col gap-8 pt-6">
@@ -49,24 +93,45 @@ export default function SearchContent() {
             </div>
           </div>
         </form>
-        
+
         <div className="bg-white p-1.5 rounded-xl inline-flex shadow-sm border border-gray-200">
             <label className="cursor-pointer relative">
-                <input className="peer sr-only" name="media-type" type="radio" value="all" defaultChecked />
+                <input
+                  className="peer sr-only"
+                  name="media-type"
+                  type="radio"
+                  value="all"
+                  checked={mediaType === 'all'}
+                  onChange={(e) => setMediaType(e.target.value)}
+                />
                 <div className="px-6 py-2 rounded-lg text-sm font-semibold text-gray-500 peer-checked:bg-primary peer-checked:text-white peer-checked:shadow-md transition-all flex items-center gap-2">
                     <span className="material-symbols-outlined text-[18px]">grid_view</span>
                     全部
                 </div>
             </label>
             <label className="cursor-pointer relative">
-                <input className="peer sr-only" name="media-type" type="radio" value="movies" />
+                <input
+                  className="peer sr-only"
+                  name="media-type"
+                  type="radio"
+                  value="movie"
+                  checked={mediaType === 'movie'}
+                  onChange={(e) => setMediaType(e.target.value)}
+                />
                 <div className="px-6 py-2 rounded-lg text-sm font-semibold text-gray-500 peer-checked:bg-primary peer-checked:text-white peer-checked:shadow-md transition-all flex items-center gap-2">
                     <span className="material-symbols-outlined text-[18px]">movie</span>
                     电影
                 </div>
             </label>
             <label className="cursor-pointer relative">
-                <input className="peer sr-only" name="media-type" type="radio" value="tv" />
+                <input
+                  className="peer sr-only"
+                  name="media-type"
+                  type="radio"
+                  value="tv"
+                  checked={mediaType === 'tv'}
+                  onChange={(e) => setMediaType(e.target.value)}
+                />
                 <div className="px-6 py-2 rounded-lg text-sm font-semibold text-gray-500 peer-checked:bg-primary peer-checked:text-white peer-checked:shadow-md transition-all flex items-center gap-2">
                     <span className="material-symbols-outlined text-[18px]">tv</span>
                     电视剧
@@ -76,28 +141,51 @@ export default function SearchContent() {
       </div>
 
       <div>
-        <div className="flex items-baseline justify-between mb-6">
-            <h2 className="text-xl text-gray-500 font-medium">
-                找到 {results.length} 个关于 <span className="text-gray-900 font-bold text-2xl mx-1">"{query}"</span> 的结果
-            </h2>
-            <div className="flex items-center gap-2 text-sm text-gray-500">
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-20">
+            <div className="animate-spin rounded-full h-16 w-16 border-4 border-primary border-t-transparent mb-4"></div>
+            <p className="text-gray-500">正在搜索中...</p>
+          </div>
+        ) : error ? (
+          <div className="flex flex-col items-center justify-center py-20">
+            <span className="material-symbols-outlined text-6xl text-gray-300 mb-4">search_off</span>
+            <p className="text-gray-500">{error}</p>
+          </div>
+        ) : query && results.length > 0 ? (
+          <>
+            <div className="flex items-baseline justify-between mb-6">
+              <h2 className="text-xl text-gray-500 font-medium">
+                找到 {filteredResults.length} 个关于 <span className="text-gray-900 font-bold text-2xl mx-1">"{query}"</span> 的结果
+              </h2>
+              <div className="flex items-center gap-2 text-sm text-gray-500">
                 <span>排序：</span>
                 <select className="bg-transparent border-none text-gray-900 font-medium focus:ring-0 cursor-pointer py-0 pr-8 pl-0">
-                    <option>相关度</option>
-                    <option>最新上映</option>
-                    <option>评分最高</option>
+                  <option>相关度</option>
+                  <option>最新上映</option>
+                  <option>评分最高</option>
                 </select>
+              </div>
             </div>
-        </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
-          {results.map(movie => (
-            <MovieCard key={movie.id} movie={movie} />
-          ))}
-        </div>
-        
-        {/* Always render pagination */}
-        <Pagination />
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
+              {filteredResults.map(movie => (
+                <MovieCard key={`${movie.source}-${movie.id}`} movie={movie} />
+              ))}
+            </div>
+
+            <Pagination />
+          </>
+        ) : query && results.length === 0 && !loading ? (
+          <div className="flex flex-col items-center justify-center py-20">
+            <span className="material-symbols-outlined text-6xl text-gray-300 mb-4">movie</span>
+            <p className="text-gray-500">请输入关键词开始搜索</p>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-20">
+            <span className="material-symbols-outlined text-6xl text-gray-300 mb-4">search</span>
+            <p className="text-gray-500">请输入关键词开始搜索</p>
+          </div>
+        )}
       </div>
     </div>
   );
