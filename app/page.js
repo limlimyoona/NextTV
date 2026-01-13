@@ -1,16 +1,22 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { MovieCard } from '../components/MovieCard';
-import { Pagination } from '../components/Pagination';
-import { fetchRecommendations, loadUserTags, saveUserTags, defaultMovieTags, defaultTvTags, convertDoubanToMovie } from '../lib/doubanApi';
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { MovieCard } from "../components/MovieCard";
+import {
+  fetchRecommendations,
+  loadUserTags,
+  saveUserTags,
+  defaultMovieTags,
+  defaultTvTags,
+  convertDoubanToMovie,
+} from "../lib/doubanApi";
 
 export default function Home() {
   const router = useRouter();
-  const [searchValue, setSearchValue] = useState('');
-  const [mediaType, setMediaType] = useState('movie');
-  const [currentTag, setCurrentTag] = useState('热门');
+  const [searchValue, setSearchValue] = useState("");
+  const [mediaType, setMediaType] = useState("movie");
+  const [currentTag, setCurrentTag] = useState("热门");
   const [movies, setMovies] = useState([]);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(0);
@@ -32,11 +38,16 @@ export default function Home() {
   const loadMovies = async () => {
     setLoading(true);
     try {
-      const data = await fetchRecommendations(mediaType, currentTag, pageSize, page * pageSize);
+      const data = await fetchRecommendations(
+        mediaType,
+        currentTag,
+        pageSize,
+        page * pageSize
+      );
       const converted = data.subjects.map(convertDoubanToMovie);
       setMovies(converted);
     } catch (error) {
-      console.error('加载失败:', error);
+      console.error("加载失败:", error);
       setMovies([]);
     } finally {
       setLoading(false);
@@ -52,7 +63,7 @@ export default function Home() {
 
   const handleMediaTypeChange = (type) => {
     setMediaType(type);
-    setCurrentTag('热门');
+    setCurrentTag("热门");
     setPage(0);
   };
 
@@ -64,24 +75,24 @@ export default function Home() {
   const handlePrevPage = () => {
     if (page > 0) {
       setPage(page - 1);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      window.scrollTo({ top: 0, behavior: "smooth" });
     }
   };
 
   const handleNextPage = () => {
     setPage(page + 1);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const currentTags = mediaType === 'movie' ? movieTags : tvTags;
+  const currentTags = mediaType === "movie" ? movieTags : tvTags;
 
   const handleAddTag = (tagName) => {
     const trimmedTag = tagName.trim();
     if (!trimmedTag) return;
 
-    if (mediaType === 'movie') {
+    if (mediaType === "movie") {
       if (movieTags.includes(trimmedTag)) {
-        alert('标签已存在');
+        alert("标签已存在");
         return;
       }
       const newTags = [...movieTags, trimmedTag];
@@ -89,7 +100,7 @@ export default function Home() {
       saveUserTags(newTags, tvTags);
     } else {
       if (tvTags.includes(trimmedTag)) {
-        alert('标签已存在');
+        alert("标签已存在");
         return;
       }
       const newTags = [...tvTags, trimmedTag];
@@ -99,36 +110,36 @@ export default function Home() {
   };
 
   const handleDeleteTag = (tag) => {
-    if (tag === '热门') {
-      alert('热门标签不能删除');
+    if (tag === "热门") {
+      alert("热门标签不能删除");
       return;
     }
 
-    if (mediaType === 'movie') {
-      const newTags = movieTags.filter(t => t !== tag);
+    if (mediaType === "movie") {
+      const newTags = movieTags.filter((t) => t !== tag);
       setMovieTags(newTags);
       saveUserTags(newTags, tvTags);
     } else {
-      const newTags = tvTags.filter(t => t !== tag);
+      const newTags = tvTags.filter((t) => t !== tag);
       setTvTags(newTags);
       saveUserTags(movieTags, newTags);
     }
 
     if (currentTag === tag) {
-      setCurrentTag('热门');
+      setCurrentTag("热门");
       setPage(0);
     }
   };
 
   const handleResetTags = () => {
-    if (mediaType === 'movie') {
+    if (mediaType === "movie") {
       setMovieTags([...defaultMovieTags]);
       saveUserTags([...defaultMovieTags], tvTags);
     } else {
       setTvTags([...defaultTvTags]);
       saveUserTags(movieTags, [...defaultTvTags]);
     }
-    setCurrentTag('热门');
+    setCurrentTag("热门");
     setPage(0);
   };
 
@@ -148,65 +159,71 @@ export default function Home() {
             onChange={(e) => setSearchValue(e.target.value)}
           />
           <div className="absolute inset-y-0 right-4 flex items-center">
-            <span className="bg-gray-100 text-gray-500 text-xs px-2 py-1 rounded border border-gray-200">⌘K</span>
+            <span className="bg-gray-100 text-gray-500 text-xs px-2 py-1 rounded border border-gray-200">
+              ⌘K
+            </span>
           </div>
         </form>
 
         <div className="bg-white p-1.5 rounded-xl inline-flex shadow-sm border border-gray-200">
-            <label className="cursor-pointer relative">
-                <input
-                  className="peer sr-only"
-                  name="media-type"
-                  type="radio"
-                  value="movie"
-                  checked={mediaType === 'movie'}
-                  onChange={() => handleMediaTypeChange('movie')}
-                />
-                <div className="px-6 py-2 rounded-lg text-sm font-semibold text-gray-500 peer-checked:bg-primary peer-checked:text-white peer-checked:shadow-md transition-all flex items-center gap-2">
-                    <span className="material-symbols-outlined text-[18px]">movie</span>
-                    电影
-                </div>
-            </label>
-            <label className="cursor-pointer relative">
-                <input
-                  className="peer sr-only"
-                  name="media-type"
-                  type="radio"
-                  value="tv"
-                  checked={mediaType === 'tv'}
-                  onChange={() => handleMediaTypeChange('tv')}
-                />
-                <div className="px-6 py-2 rounded-lg text-sm font-semibold text-gray-500 peer-checked:bg-primary peer-checked:text-white peer-checked:shadow-md transition-all flex items-center gap-2">
-                    <span className="material-symbols-outlined text-[18px]">tv</span>
-                    电视剧
-                </div>
-            </label>
+          <label className="cursor-pointer relative">
+            <input
+              className="peer sr-only"
+              name="media-type"
+              type="radio"
+              value="movie"
+              checked={mediaType === "movie"}
+              onChange={() => handleMediaTypeChange("movie")}
+            />
+            <div className="px-6 py-2 rounded-lg text-sm font-semibold text-gray-500 peer-checked:bg-primary peer-checked:text-white peer-checked:shadow-md transition-all flex items-center gap-2">
+              <span className="material-symbols-outlined text-[18px]">
+                movie
+              </span>
+              电影
+            </div>
+          </label>
+          <label className="cursor-pointer relative">
+            <input
+              className="peer sr-only"
+              name="media-type"
+              type="radio"
+              value="tv"
+              checked={mediaType === "tv"}
+              onChange={() => handleMediaTypeChange("tv")}
+            />
+            <div className="px-6 py-2 rounded-lg text-sm font-semibold text-gray-500 peer-checked:bg-primary peer-checked:text-white peer-checked:shadow-md transition-all flex items-center gap-2">
+              <span className="material-symbols-outlined text-[18px]">tv</span>
+              电视剧
+            </div>
+          </label>
         </div>
       </div>
 
       {/* Categories */}
       <div className="w-full overflow-hidden relative group/scroll">
         <div className="flex gap-3 overflow-x-auto hide-scrollbar py-2 px-1">
+          <button
+            onClick={() => setShowTagModal(true)}
+            className="shrink-0 px-5 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-900 cursor-pointer"
+          >
+            <span className="material-symbols-outlined text-[16px] align-middle mr-1">
+              add
+            </span>
+            管理标签
+          </button>
+          {currentTags.map((tag) => (
             <button
-              onClick={() => setShowTagModal(true)}
-              className="shrink-0 px-5 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-900 cursor-pointer"
+              key={tag}
+              onClick={() => handleTagClick(tag)}
+              className={`shrink-0 px-5 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all cursor-pointer ${
+                tag === currentTag
+                  ? "bg-primary/10 border border-primary text-primary font-semibold hover:bg-primary hover:text-white"
+                  : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+              }`}
             >
-              <span className="material-symbols-outlined text-[16px] align-middle mr-1">add</span>
-              管理标签
+              {tag}
             </button>
-            {currentTags.map((tag) => (
-                <button
-                    key={tag}
-                    onClick={() => handleTagClick(tag)}
-                    className={`shrink-0 px-5 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all cursor-pointer ${
-                      tag === currentTag
-                        ? 'bg-primary/10 border border-primary text-primary font-semibold hover:bg-primary hover:text-white'
-                        : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                    }`}
-                >
-                    {tag}
-                </button>
-            ))}
+          ))}
         </div>
         <div className="absolute right-0 top-0 bottom-0 w-24 bg-gradient-to-l from-background-light to-transparent pointer-events-none"></div>
       </div>
@@ -226,24 +243,28 @@ export default function Home() {
               disabled={page === 0}
               className={`flex items-center justify-center w-9 h-9 rounded-lg border transition-all ${
                 page === 0
-                  ? 'border-gray-200 text-gray-300 cursor-not-allowed opacity-50'
-                  : 'border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-primary hover:text-primary cursor-pointer'
+                  ? "border-gray-200 text-gray-300 cursor-not-allowed opacity-50"
+                  : "border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-primary hover:text-primary cursor-pointer"
               }`}
               title="上一页"
             >
-              <span className="material-symbols-outlined text-[20px]">chevron_left</span>
+              <span className="material-symbols-outlined text-[20px]">
+                chevron_left
+              </span>
             </button>
             <button
               onClick={handleNextPage}
               disabled={movies.length < pageSize}
               className={`flex items-center justify-center w-9 h-9 rounded-lg border transition-all ${
                 movies.length < pageSize
-                  ? 'border-gray-200 text-gray-300 cursor-not-allowed opacity-50'
-                  : 'border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-primary hover:text-primary cursor-pointer'
+                  ? "border-gray-200 text-gray-300 cursor-not-allowed opacity-50"
+                  : "border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-primary hover:text-primary cursor-pointer"
               }`}
               title="下一页"
             >
-              <span className="material-symbols-outlined text-[20px]">chevron_right</span>
+              <span className="material-symbols-outlined text-[20px]">
+                chevron_right
+              </span>
             </button>
           </div>
         </div>
@@ -255,7 +276,7 @@ export default function Home() {
           </div>
         ) : (
           <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-6 gap-6">
-            {movies.map(movie => (
+            {movies.map((movie) => (
               <MovieCard key={movie.id} movie={movie} />
             ))}
           </div>
@@ -274,7 +295,7 @@ export default function Home() {
           >
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xl font-bold text-gray-900">
-                标签管理 ({mediaType === 'movie' ? '电影' : '电视剧'})
+                标签管理 ({mediaType === "movie" ? "电影" : "电视剧"})
               </h3>
               <button
                 onClick={() => setShowTagModal(false)}
@@ -301,12 +322,14 @@ export default function Home() {
                     className="group bg-gray-100 text-gray-700 py-1.5 px-3 rounded-lg text-sm font-medium flex items-center gap-2"
                   >
                     <span>{tag}</span>
-                    {tag !== '热门' && (
+                    {tag !== "热门" && (
                       <button
                         onClick={() => handleDeleteTag(tag)}
                         className="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
                       >
-                        <span className="material-symbols-outlined text-[16px]">close</span>
+                        <span className="material-symbols-outlined text-[16px]">
+                          close
+                        </span>
                       </button>
                     )}
                   </div>
@@ -321,7 +344,7 @@ export default function Home() {
                   e.preventDefault();
                   const input = e.target.elements.tagName;
                   handleAddTag(input.value);
-                  input.value = '';
+                  input.value = "";
                 }}
                 className="flex gap-2"
               >
