@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { MovieCard } from "@/components/MovieCard";
 import { ContinueWatching } from "@/components/ContinueWatching";
+import { SearchBox } from "@/components/SearchBox";
 import { usePlayHistoryStore } from "@/store/usePlayHistoryStore";
 import {
   fetchRecommendations,
@@ -16,7 +17,6 @@ import {
 
 export default function Home() {
   const router = useRouter();
-  const [searchValue, setSearchValue] = useState("");
   const [mediaType, setMediaType] = useState("movie");
   const [currentTag, setCurrentTag] = useState("热门");
   const [movies, setMovies] = useState([]);
@@ -56,13 +56,6 @@ export default function Home() {
       setMovies([]);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleSearch = (e) => {
-    e.preventDefault();
-    if (searchValue.trim()) {
-      router.push(`/search?q=${encodeURIComponent(searchValue)}`);
     }
   };
 
@@ -152,23 +145,7 @@ export default function Home() {
     <div className="w-full max-w-7xl flex flex-col gap-8 pt-6">
       {/* Search Hero */}
       <div className="flex flex-col items-center justify-start gap-6 w-full max-w-3xl mx-auto">
-        <form onSubmit={handleSearch} className="w-full relative group">
-          <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-gray-400 group-focus-within:text-primary transition-colors">
-            <span className="material-symbols-outlined">search</span>
-          </div>
-          <input
-            className="w-full h-14 bg-white border border-gray-200 rounded-xl pl-12 pr-4 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-primary focus:border-transparent transition-all shadow-sm text-lg"
-            placeholder="搜索电影、电视剧..."
-            type="text"
-            value={searchValue}
-            onChange={(e) => setSearchValue(e.target.value)}
-          />
-          <div className="absolute inset-y-0 right-4 flex items-center">
-            <span className="bg-gray-100 text-gray-500 text-xs px-2 py-1 rounded border border-gray-200">
-              ⌘K
-            </span>
-          </div>
-        </form>
+        <SearchBox />
 
         <div className="bg-white p-1.5 rounded-xl inline-flex shadow-sm border border-gray-200">
           <label className="cursor-pointer relative">

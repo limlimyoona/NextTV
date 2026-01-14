@@ -1,26 +1,21 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { MovieCard } from "@/components/MovieCard";
+import { SearchBox } from "@/components/SearchBox";
 import { useSettingsStore } from "@/store/useSettingsStore";
 import { searchVideos } from "@/lib/cmsApi";
 
 export default function SearchContent() {
   const searchParams = useSearchParams();
   const query = searchParams.get("q") || "";
-  const router = useRouter();
-  const [inputValue, setInputValue] = useState(query);
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [mediaType, setMediaType] = useState("all"); // 'all', 'movie', 'tv'
   const [sourceFilter, setSourceFilter] = useState("all"); // 视频源筛选
   const videoSources = useSettingsStore((state) => state.videoSources);
-
-  useEffect(() => {
-    setInputValue(query);
-  }, [query]);
 
   // 执行搜索
   useEffect(() => {
@@ -51,13 +46,6 @@ export default function SearchContent() {
 
     performSearch();
   }, [query, videoSources]);
-
-  const handleSearch = (e) => {
-    e.preventDefault();
-    if (inputValue && inputValue.trim()) {
-      router.push(`/search?q=${encodeURIComponent(inputValue)}`);
-    }
-  };
 
   // 根据媒体类型和视频源过滤结果
   const filteredResults = results.filter((result) => {
@@ -151,40 +139,7 @@ export default function SearchContent() {
   return (
     <div className="w-full max-w-7xl flex flex-col gap-8 pt-6">
       <div className="flex flex-col items-center justify-start gap-6 w-full max-w-3xl mx-auto">
-        <form onSubmit={handleSearch} className="w-full relative group">
-          <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-gray-400 group-focus-within:text-primary transition-colors">
-            <span className="material-symbols-outlined">search</span>
-          </div>
-          <input
-            className="w-full h-14 bg-white border border-gray-200 rounded-xl pl-12 pr-4 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-primary focus:border-transparent transition-all shadow-sm text-lg"
-            placeholder="搜索电影、电视剧..."
-            type="text"
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-          />
-          <div className="absolute inset-y-0 right-4 flex items-center">
-            <div className="flex gap-2">
-              {inputValue && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setInputValue("");
-                    router.push("/search");
-                  }}
-                  className="p-1 hover:bg-gray-100 rounded-md text-gray-400 hover:text-gray-600 transition-colors"
-                >
-                  <span className="material-symbols-outlined text-xl">
-                    close
-                  </span>
-                </button>
-              )}
-              <div className="w-px h-6 bg-gray-200 self-center"></div>
-              <span className="bg-gray-100 text-gray-500 text-xs px-2 py-1 rounded border border-gray-200 self-center">
-                ⌘K
-              </span>
-            </div>
-          </div>
-        </form>
+        <SearchBox initialValue={query} />
 
         <div className="bg-white p-1.5 rounded-xl inline-flex shadow-sm border border-gray-200">
           <label className="cursor-pointer relative">
