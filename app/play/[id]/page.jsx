@@ -98,6 +98,11 @@ export default function PlayerPage() {
   // 用于记录是否需要在播放器 ready 后跳转到指定进度
   const resumeTimeRef = useRef(null);
 
+  // 标记是否正在切换集数（用于防止错误恢复进度）
+  const isEpisodeSwitchingRef = useRef(false);
+  // 记录当前播放的集数（切换前的集数，用于正确保存进度）
+  const playingEpisodeIndexRef = useRef(0);
+
   // 上次使用的音量和播放速率
   const lastVolumeRef = useRef(0.7);
   const lastPlaybackRateRef = useRef(1.0);
@@ -163,7 +168,8 @@ export default function PlayerPage() {
   };
 
   // 保存播放进度函数
-  const savePlayProgress = () => {
+  // 参数 episodeIndex: 可选，指定要保存的集数索引，如果不传则使用当前正在播放的集数
+  const savePlayProgress = (episodeIndex = null) => {
     if (!artPlayerRef.current || !videoDetailRef.current || !id || !source)
       return;
 
@@ -172,6 +178,10 @@ export default function PlayerPage() {
 
     if (currentTime < 1 || !duration) return;
 
+    // 使用传入的集数索引，或者使用正在播放的集数（而不是 state 中可能已更新的集数）
+    const saveEpisodeIndex =
+      episodeIndex !== null ? episodeIndex : playingEpisodeIndexRef.current;
+
     try {
       addPlayRecord({
         source,
@@ -179,14 +189,14 @@ export default function PlayerPage() {
         title: videoDetailRef.current.title,
         poster: videoDetailRef.current.poster,
         year: videoDetailRef.current.year,
-        currentEpisodeIndex: currentEpisodeIndexRef.current,
+        currentEpisodeIndex: saveEpisodeIndex,
         totalEpisodes: videoDetailRef.current.episodes?.length || 1,
         currentTime,
         duration,
       });
       console.log("播放进度已保存:", {
         title: videoDetailRef.current.title,
-        episode: currentEpisodeIndexRef.current + 1,
+        episode: saveEpisodeIndex + 1,
         progress: `${Math.floor(currentTime)}/${Math.floor(duration)}`,
       });
     } catch (err) {
@@ -346,14 +356,19 @@ export default function PlayerPage() {
       try {
         console.log(`获取豆瓣演员数据: 豆瓣ID=${videoDetail.douban_id}`);
         const result = await scrapeDoubanDetails(videoDetail.douban_id);
-        
+
         if (result.code === 200 && result.data.actors) {
           // 豆瓣图片代理
           result.data.actors.forEach((actor) => {
-            actor.avatar = actor.avatar.replace(/img\d+\.doubanio\.com/g, "img.doubanio.cmliussss.com");
+            actor.avatar = actor.avatar.replace(
+              /img\d+\.doubanio\.com/g,
+              "img.doubanio.cmliussss.com"
+            );
           });
           setDoubanActors(result.data.actors);
-          console.log(`豆瓣演员数据加载完成，共 ${result.data.actors.length} 位演员`);
+          console.log(
+            `豆瓣演员数据加载完成，共 ${result.data.actors.length} 位演员`
+          );
         }
       } catch (error) {
         console.warn("获取豆瓣演员数据失败:", error.message);
@@ -380,7 +395,10 @@ export default function PlayerPage() {
     // 非 WebKit 浏览器且播放器已存在，使用 switch 方法切换
     if (!isWebkit && artPlayerRef.current) {
       console.log("使用 switch 方法切换视频:", currentEpisodeUrl);
-      artPlayerRef.current.switchUrl(currentEpisodeUrl);
+      // 注意：在 switch 完成前不要更新 playingEpisodeIndexRef，否则 pause 事件会保存错误的进度
+      // playingEpisodeIndexRef 会在 video:canplay 事件中更新
+      // isEpisodeSwitchingRef 也会在 video:canplay 事件中重置
+      artPlayerRef.current.switch = currentEpisodeUrl;
       artPlayerRef.current.title = videoDetail
         ? `${videoDetail.title} - ${currentEpisodeTitle}`
         : "";
@@ -396,6 +414,10 @@ export default function PlayerPage() {
 
     // 重置弹幕加载标志
     hasLoadedFirstDanmaku.current = false;
+    // 更新正在播放的集数索引
+    playingEpisodeIndexRef.current = currentEpisodeIndex;
+    // 重置切换标记
+    isEpisodeSwitchingRef.current = false;
 
     try {
       console.log("创建新的播放器实例:", currentEpisodeUrl);
@@ -656,6 +678,10 @@ export default function PlayerPage() {
                 detail.episodes &&
                 idx < detail.episodes.length - 1
               ) {
+                // 标记正在切换集数，防止错误恢复进度
+                isEpisodeSwitchingRef.current = true;
+                // 在切换前保存当前集数的进度
+                savePlayProgress(idx);
                 setCurrentEpisodeIndex(idx + 1);
               }
             },
@@ -689,6 +715,13 @@ export default function PlayerPage() {
 
       // 监听视频可播放事件，恢复播放进度
       artPlayerRef.current.on("video:canplay", () => {
+        // 视频已准备好播放，现在可以安全地更新集数索引并重置切换标记
+        if (isEpisodeSwitchingRef.current) {
+          console.log("视频已就绪，更新集数索引并重置切换标记");
+          playingEpisodeIndexRef.current = currentEpisodeIndexRef.current;
+          isEpisodeSwitchingRef.current = false;
+        }
+
         if (resumeTimeRef.current && resumeTimeRef.current > 0) {
           try {
             const duration = artPlayerRef.current.duration || 0;
@@ -761,6 +794,10 @@ export default function PlayerPage() {
           const detail = videoDetailRef.current;
           const idx = currentEpisodeIndexRef.current;
           if (detail && detail.episodes && idx < detail.episodes.length - 1) {
+            // 标记正在切换集数，防止错误恢复进度
+            isEpisodeSwitchingRef.current = true;
+            // 在切换前保存当前集数的进度
+            savePlayProgress(idx);
             setCurrentEpisodeIndex(idx + 1);
           } else {
             artPlayerRef.current.pause();
@@ -777,8 +814,12 @@ export default function PlayerPage() {
         }
       });
 
-      // 暂停时保存进度
+      // 暂停时保存进度（切换集数时跳过，因为 switch 会触发 pause 事件）
       artPlayerRef.current.on("pause", () => {
+        if (isEpisodeSwitchingRef.current) {
+          console.log("切换集数中，跳过暂停保存进度");
+          return;
+        }
         savePlayProgress();
       });
 
@@ -787,6 +828,10 @@ export default function PlayerPage() {
         const detail = videoDetailRef.current;
         const idx = currentEpisodeIndexRef.current;
         if (detail && detail.episodes && idx < detail.episodes.length - 1) {
+          // 标记正在切换集数，防止错误恢复进度
+          isEpisodeSwitchingRef.current = true;
+          // 在切换前保存当前集数的进度（虽然已经播放结束，但还是记录一下）
+          savePlayProgress(idx);
           setTimeout(() => {
             setCurrentEpisodeIndex(idx + 1);
           }, 1000);
@@ -847,13 +892,25 @@ export default function PlayerPage() {
   useEffect(() => {
     if (!videoDetail || !id || !source) return;
 
+    // 如果正在切换集数，清除恢复时间并跳过恢复逻辑
+    if (isEpisodeSwitchingRef.current) {
+      console.log("切换集数中，跳过恢复播放进度");
+      resumeTimeRef.current = null;
+      return;
+    }
+
     const playRecord = getPlayRecord(source, id);
     if (playRecord && playRecord.currentEpisodeIndex === currentEpisodeIndex) {
       const targetTime = playRecord.currentTime;
+      // 确保目标时间大于5秒，且不是接近视频结尾的时间（避免恢复到快结束的位置）
       if (targetTime > 5) {
         resumeTimeRef.current = targetTime;
         console.log("将恢复播放进度:", targetTime);
       }
+    } else {
+      // 切换到新集数，从头开始播放
+      resumeTimeRef.current = null;
+      console.log("新集数，从头开始播放");
     }
   }, [videoDetail, id, source, currentEpisodeIndex, getPlayRecord]);
 
@@ -871,6 +928,9 @@ export default function PlayerPage() {
       // Alt + 左箭头 = 上一集
       if (e.altKey && e.key === "ArrowLeft") {
         if (detail && idx > 0) {
+          // 标记正在切换集数
+          isEpisodeSwitchingRef.current = true;
+          savePlayProgress(idx);
           setCurrentEpisodeIndex(idx - 1);
           e.preventDefault();
         }
@@ -879,6 +939,9 @@ export default function PlayerPage() {
       // Alt + 右箭头 = 下一集
       if (e.altKey && e.key === "ArrowRight") {
         if (detail && detail.episodes && idx < detail.episodes.length - 1) {
+          // 标记正在切换集数
+          isEpisodeSwitchingRef.current = true;
+          savePlayProgress(idx);
           setCurrentEpisodeIndex(idx + 1);
           e.preventDefault();
         }
@@ -981,6 +1044,10 @@ export default function PlayerPage() {
   // 切换剧集
   // -------------------------------------------------------------------------
   const handleEpisodeClick = (index) => {
+    // 标记正在切换集数
+    isEpisodeSwitchingRef.current = true;
+    // 保存当前集数的进度
+    savePlayProgress(currentEpisodeIndex);
     setCurrentEpisodeIndex(index);
   };
 
@@ -1133,11 +1200,15 @@ export default function PlayerPage() {
                   <p className="leading-relaxed">{videoDetail.desc}</p>
                 </div>
               )}
-              {(doubanActors.length > 0 || (videoDetail.actors && videoDetail.actors.length > 0)) && (
+              {(doubanActors.length > 0 ||
+                (videoDetail.actors && videoDetail.actors.length > 0)) && (
                 <div>
                   <h3 className="text-gray-900 font-semibold mb-3">演员表</h3>
                   <div className="flex gap-4 overflow-x-auto pb-2 hide-scrollbar">
-                    {(doubanActors.length > 0 ? doubanActors : videoDetail.actors).map((actor, idx) => (
+                    {(doubanActors.length > 0
+                      ? doubanActors
+                      : videoDetail.actors
+                    ).map((actor, idx) => (
                       <div
                         key={actor.id || idx}
                         className="flex flex-col items-center gap-2 min-w-[70px]"
@@ -1149,14 +1220,14 @@ export default function PlayerPage() {
                               alt={actor.name}
                               className="w-full h-full object-cover"
                               onError={(e) => {
-                                e.target.style.display = 'none';
-                                e.target.nextSibling.style.display = 'flex';
+                                e.target.style.display = "none";
+                                e.target.nextSibling.style.display = "flex";
                               }}
                             />
                           ) : null}
-                          <span 
+                          <span
                             className="material-symbols-outlined text-gray-400 text-2xl"
-                            style={{ display: actor.avatar ? 'none' : 'flex' }}
+                            style={{ display: actor.avatar ? "none" : "flex" }}
                           >
                             person
                           </span>

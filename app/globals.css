@@ -118,7 +118,8 @@ body {
    borrow from https://github.com/SzeMeng76/LunaTV
    ============================================ */
 
-.artplayer-plugin-liquid-glass.art-control-show {
+/* 将 CSS 变量定义在基类上，避免控制栏隐藏时变量回退导致的闪烁 */
+.artplayer-plugin-liquid-glass {
   --art-control-height: 42px;
   --art-control-icon-size: 24px;
   --art-control-icon-scale: 1.1;
