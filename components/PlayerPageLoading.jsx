@@ -8,7 +8,7 @@ const TYPEWRITER_MESSAGES = ["同步请求弹幕和豆瓣源中，请耐心等�
 // ============================================================================
 // 加载状态组件 - 带打字机效果
 // ============================================================================
-export default function LoadingSpinner() {
+export function LoadingSpinner() {
   const [textIndex, setTextIndex] = useState(0); // 当前显示哪段文字
   const [displayedText, setDisplayedText] = useState(""); // 当前已显示的文字
   const [isDeleting, setIsDeleting] = useState(false); // 是否在删除文字

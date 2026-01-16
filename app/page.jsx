@@ -5,14 +5,7 @@ import { SkeletonCard } from "@/components/SkeletonCard";
 import { ContinueWatching } from "@/components/ContinueWatching";
 import { SearchBox } from "@/components/SearchBox";
 import { usePlayHistoryStore } from "@/store/usePlayHistoryStore";
-import {
-  fetchRecommendations,
-  loadUserTags,
-  saveUserTags,
-  defaultMovieTags,
-  defaultTvTags,
-  convertDoubanToMovie,
-} from "@/lib/doubanApi";
+import { fetchRecommendations, loadUserTags, saveUserTags, defaultMovieTags, defaultTvTags, convertDoubanToMovie } from "@/lib/doubanApi";
 
 export default function Home() {
   const [mediaType, setMediaType] = useState("movie");
@@ -37,12 +30,7 @@ export default function Home() {
   const loadMovies = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await fetchRecommendations(
-        mediaType,
-        currentTag,
-        pageSize,
-        page * pageSize
-      );
+      const data = await fetchRecommendations(mediaType, currentTag, pageSize, page * pageSize);
       const converted = data.subjects.map(convertDoubanToMovie);
       setMovies(converted);
     } catch (error) {
@@ -147,30 +135,14 @@ export default function Home() {
 
         <div className="bg-white p-1.5 rounded-xl inline-flex shadow-sm border border-gray-200">
           <label className="cursor-pointer relative">
-            <input
-              className="peer sr-only"
-              name="media-type"
-              type="radio"
-              value="movie"
-              checked={mediaType === "movie"}
-              onChange={() => handleMediaTypeChange("movie")}
-            />
+            <input className="peer sr-only" name="media-type" type="radio" value="movie" checked={mediaType === "movie"} onChange={() => handleMediaTypeChange("movie")} />
             <div className="media-toggle-btn px-6 py-2 rounded-lg text-sm font-semibold text-gray-500 peer-checked:bg-primary peer-checked:text-white peer-checked:shadow-md flex items-center gap-2">
-              <span className="material-symbols-outlined text-[18px]">
-                movie
-              </span>
+              <span className="material-symbols-outlined text-[18px]">movie</span>
               电影
             </div>
           </label>
           <label className="cursor-pointer relative">
-            <input
-              className="peer sr-only"
-              name="media-type"
-              type="radio"
-              value="tv"
-              checked={mediaType === "tv"}
-              onChange={() => handleMediaTypeChange("tv")}
-            />
+            <input className="peer sr-only" name="media-type" type="radio" value="tv" checked={mediaType === "tv"} onChange={() => handleMediaTypeChange("tv")} />
             <div className="media-toggle-btn px-6 py-2 rounded-lg text-sm font-semibold text-gray-500 peer-checked:bg-primary peer-checked:text-white peer-checked:shadow-md flex items-center gap-2">
               <span className="material-symbols-outlined text-[18px]">tv</span>
               电视剧
@@ -186,9 +158,7 @@ export default function Home() {
             onClick={() => setShowTagModal(true)}
             className="shrink-0 px-5 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-900 cursor-pointer btn-press"
           >
-            <span className="material-symbols-outlined text-[16px] align-middle mr-1">
-              add
-            </span>
+            <span className="material-symbols-outlined text-[16px] align-middle mr-1">add</span>
             管理标签
           </button>
           {currentTags.map((tag) => (
@@ -222,15 +192,11 @@ export default function Home() {
               onClick={handlePrevPage}
               disabled={page === 0}
               className={`flex items-center justify-center w-9 h-9 rounded-lg border transition-all btn-press ${
-                page === 0
-                  ? "border-gray-200 text-gray-300 cursor-not-allowed opacity-50"
-                  : "border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-primary hover:text-primary cursor-pointer"
+                page === 0 ? "border-gray-200 text-gray-300 cursor-not-allowed opacity-50" : "border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-primary hover:text-primary cursor-pointer"
               }`}
               title="上一页"
             >
-              <span className="material-symbols-outlined text-[20px]">
-                chevron_left
-              </span>
+              <span className="material-symbols-outlined text-[20px]">chevron_left</span>
             </button>
             <button
               onClick={handleNextPage}
@@ -242,9 +208,7 @@ export default function Home() {
               }`}
               title="下一页"
             >
-              <span className="material-symbols-outlined text-[20px]">
-                chevron_right
-              </span>
+              <span className="material-symbols-outlined text-[20px]">chevron_right</span>
             </button>
           </div>
         </div>
@@ -267,28 +231,15 @@ export default function Home() {
       </div>
 
       {/* Continue Watching Section */}
-      {playHistory && playHistory.length > 0 && (
-        <ContinueWatching playHistory={playHistory} />
-      )}
+      {playHistory && playHistory.length > 0 && <ContinueWatching playHistory={playHistory} />}
 
       {/* Tag Management Modal */}
       {showTagModal && (
-        <div
-          className="fixed inset-0 bg-black/75 flex items-center justify-center z-50 modal-backdrop-enter"
-          onClick={() => setShowTagModal(false)}
-        >
-          <div
-            className="bg-white rounded-2xl p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto modal-content-enter"
-            onClick={(e) => e.stopPropagation()}
-          >
+        <div className="fixed inset-0 bg-black/75 flex items-center justify-center z-50 modal-backdrop-enter" onClick={() => setShowTagModal(false)}>
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto modal-content-enter" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-bold text-gray-900">
-                标签管理 ({mediaType === "movie" ? "电影" : "电视剧"})
-              </h3>
-              <button
-                onClick={() => setShowTagModal(false)}
-                className="text-gray-400 hover:text-gray-600 cursor-pointer transition-colors btn-press"
-              >
+              <h3 className="text-xl font-bold text-gray-900">标签管理 ({mediaType === "movie" ? "电影" : "电视剧"})</h3>
+              <button onClick={() => setShowTagModal(false)} className="text-gray-400 hover:text-gray-600 cursor-pointer transition-colors btn-press">
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
@@ -296,28 +247,17 @@ export default function Home() {
             <div className="mb-6">
               <div className="flex items-center justify-between mb-3">
                 <h4 className="font-semibold text-gray-700">当前标签</h4>
-                <button
-                  onClick={handleResetTags}
-                  className="text-xs px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg cursor-pointer transition-colors btn-press"
-                >
+                <button onClick={handleResetTags} className="text-xs px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg cursor-pointer transition-colors btn-press">
                   恢复默认
                 </button>
               </div>
               <div className="flex flex-wrap gap-2">
                 {currentTags.map((tag) => (
-                  <div
-                    key={tag}
-                    className="group bg-gray-100 text-gray-700 py-1.5 px-3 rounded-lg text-sm font-medium flex items-center gap-2"
-                  >
+                  <div key={tag} className="group bg-gray-100 text-gray-700 py-1.5 px-3 rounded-lg text-sm font-medium flex items-center gap-2">
                     <span>{tag}</span>
                     {tag !== "热门" && (
-                      <button
-                        onClick={() => handleDeleteTag(tag)}
-                        className="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer btn-press"
-                      >
-                        <span className="material-symbols-outlined text-[16px]">
-                          close
-                        </span>
+                      <button onClick={() => handleDeleteTag(tag)} className="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer btn-press">
+                        <span className="material-symbols-outlined text-[16px]">close</span>
                       </button>
                     )}
                   </div>
@@ -342,10 +282,7 @@ export default function Home() {
                   placeholder="输入标签名称..."
                   className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                 />
-                <button
-                  type="submit"
-                  className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg font-medium cursor-pointer transition-colors btn-press"
-                >
+                <button type="submit" className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg font-medium cursor-pointer transition-colors btn-press">
                   添加
                 </button>
               </form>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useEffectEvent, useRef, use } from "react";
+import { useState, useEffect, useEffectEvent, useRef } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Artplayer from "artplayer";
@@ -13,8 +13,10 @@ import { useSettingsStore } from "@/store/useSettingsStore";
 import { usePlayHistoryStore } from "@/store/usePlayHistoryStore";
 import { formatTime } from "@/lib/util";
 import { filterAdsFromM3U8 } from "@/lib/util";
-import { getInitialDataPromise } from "@/lib/paralleLoadingData";
+import { getVideoDetail } from "@/lib/cmsApi";
+import { scrapeDoubanDetails } from "@/lib/getDouban";
 import { createDanmakuLoader } from "@/lib/danmakuApi";
+import { LoadingSpinner } from "@/components/PlayerPageLoading";
 // ============================================================================
 // 主组件
 // ============================================================================
@@ -31,32 +33,28 @@ export default function PlayerPage() {
   const getPlayRecord = usePlayHistoryStore((state) => state.getPlayRecord);
   const danmakuSources = useSettingsStore((state) => state.danmakuSources);
   const blockAdEnabled = useSettingsStore((state) => state.blockAdEnabled);
-  const setBlockAdEnabled = useSettingsStore((state) => state.setBlockAdEnabled);
   const skipConfig = useSettingsStore((state) => state.skipConfig);
-  const setSkipConfig = useSettingsStore((state) => state.setSkipConfig);
-  const videoSources = useSettingsStore((state) => state.videoSources);
-  const playHistory = usePlayHistoryStore((state) => state.playHistory);
-  // 获取或创建初始数据 Promise
-  const dataPromise = getInitialDataPromise(id, source, videoSources, playHistory);
-
-  // 使用 React 19 的 use hook 消费 Promise
-
-  const { videoDetail, doubanActors, initialEpisodeIndex, initialTime } = use(dataPromise);
 
   // -------------------------------------------------------------------------
   // 状态
   // -------------------------------------------------------------------------
-  const [currentEpisodeIndex, setCurrentEpisodeIndex] = useState(initialEpisodeIndex);
-
+  const [currentEpisodeIndex, setCurrentEpisodeIndex] = useState(0);
+  const [videoDetail, setVideoDetail] = useState(null);
+  const [doubanActors, setDoubanActors] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   // -------------------------------------------------------------------------
   // 播放器相关的 Refs（只保留必要的）
   // -------------------------------------------------------------------------
   const artRef = useRef(null); // 播放器容器 DOM
   const artPlayerRef = useRef(null); // Artplayer 实例
-
+  const blockAdEnabledRef = useRef(blockAdEnabled);
   // 时间控制
   const lastSkipCheckRef = useRef(0);
   const lastSaveTimeRef = useRef(0);
+  // 初始化剧集
+  const initialEpisodeIndex = useRef(0);
+  const initialTime = useRef(0);
 
   // ============================================================================
   // 普通版本的响应式函数
@@ -182,7 +180,6 @@ export default function PlayerPage() {
     // 限制检查频率
     if (now - lastSkipCheckRef.current < 1500) return;
     lastSkipCheckRef.current = now;
-
     // 跳过片头
     if (skipConfig.intro_time > 0 && currentTime < skipConfig.intro_time) {
       artPlayerRef.current.currentTime = skipConfig.intro_time;
@@ -279,48 +276,105 @@ export default function PlayerPage() {
   });
   const handleAutoNextEpisodeEvent = useEffectEvent(() => {
     if (videoDetail && videoDetail.episodes && currentEpisodeIndex < videoDetail.episodes.length - 1) {
-      savePlayProgressEvent();
+      savePlayProgress();
       setTimeout(() => {
         switchToEpisode(currentEpisodeIndex + 1);
       }, 1000);
     }
   });
+  // 自定义 HLS Loader（去广告）
+  class CustomHlsJsLoader extends Hls.DefaultConfig.loader {
+    constructor(config) {
+      super(config);
+      const load = this.load.bind(this);
+      this.load = function (context, config, callbacks) {
+        if (context.type === "manifest" || context.type === "level") {
+          const onSuccess = callbacks.onSuccess;
+          callbacks.onSuccess = function (response, stats, context) {
+            if (response.data && typeof response.data === "string") {
+              response.data = filterAdsFromM3U8(response.data, videoDetail.source_url || "");
+            }
+            return onSuccess(response, stats, context, null);
+          };
+        }
+        load(context, config, callbacks);
+      };
+    }
+  }
   // -------------------------------------------------------------------------
-  // 播放器初始化（只执行一次，使用初始数据）
+  // 加载数据
   // -------------------------------------------------------------------------
   useEffect(() => {
-    if (!artRef.current || artPlayerRef.current) {
+    blockAdEnabledRef.current = blockAdEnabled;
+  }, [blockAdEnabled]);
+
+  useEffect(() => {
+    async function loadData() {
+      if (!id || !source) {
+        setError("缺少必要的参数");
+        setLoading(false);
+        return;
+      }
+
+      const videoSources = useSettingsStore.getState().videoSources;
+      const sourceConfig = videoSources.find((s) => s.key === source);
+      if (!sourceConfig) {
+        setError("未找到对应的视频源");
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      setError(null);
+
+      try {
+        const videoDetailData = await getVideoDetail(id, sourceConfig.name, sourceConfig.url);
+        setVideoDetail(videoDetailData);
+        // 2. 读取播放记录，确定初始集数
+        const playHistory = usePlayHistoryStore.getState().playHistory;
+        const playRecord = playHistory.find((item) => item.source === source && item.id === id);
+        initialEpisodeIndex.current = playRecord?.currentEpisodeIndex ?? 0;
+        setCurrentEpisodeIndex(() => initialEpisodeIndex.current);
+        initialTime.current = playRecord?.currentTime && playRecord.currentTime > 5 ? playRecord.currentTime : 0;
+        if (!videoDetailData.douban_id) {
+          console.log("没有豆瓣ID，无法获取弹幕");
+          return;
+        }
+        const doubanResult = await scrapeDoubanDetails(videoDetailData.douban_id);
+        if (doubanResult.code === 200 && doubanResult.data.actors) {
+          const doubanActorData = doubanResult.data.actors.map((actor) => {
+            return {
+              ...actor,
+              avatar: actor.avatar.replace(/img\d+\.doubanio\.com/g, "img.doubanio.cmliussss.com"),
+            };
+          });
+          setDoubanActors(doubanActorData);
+        } else {
+          console.warn("获取豆瓣演员数据失败:", doubanResult.reason?.message);
+          setDoubanActors([]);
+        }
+      } catch (err) {
+        console.error("加载数据失败:", err);
+        setError("加载数据失败");
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+  }, [id, source]);
+
+  // -------------------------------------------------------------------------
+  // 播放器初始化（当 DOM 容器和视频数据都准备好时执行）
+  // -------------------------------------------------------------------------
+  useEffect(() => {
+    // 检查：1. 不在加载中 2. 有视频数据 3. DOM 已挂载 4. 播放器未初始化
+    if (loading || !videoDetail || !artRef.current || artPlayerRef.current) {
       return;
     }
 
-    // 自定义 HLS Loader（去广告）
-    class CustomHlsJsLoader extends Hls.DefaultConfig.loader {
-      constructor(config) {
-        super(config);
-        const load = this.load.bind(this);
-        this.load = function (context, config, callbacks) {
-          if (context.type === "manifest" || context.type === "level") {
-            const onSuccess = callbacks.onSuccess;
-            callbacks.onSuccess = function (response, stats, context) {
-              if (response.data && typeof response.data === "string") {
-                response.data = filterAdsFromM3U8(response.data);
-              }
-              return onSuccess(response, stats, context, null);
-            };
-          }
-          load(context, config, callbacks);
-        };
-      }
-    }
-
     try {
-      console.log("初始化播放器:", {
-        episode: initialEpisodeIndex + 1,
-        time: initialTime,
-      });
-
-      const currentUrl = videoDetail?.episodes?.[initialEpisodeIndex] || "";
-      const currentTitle = videoDetail?.episodes_titles?.[initialEpisodeIndex] || `第${initialEpisodeIndex + 1}集`;
+      const currentUrl = videoDetail?.episodes?.[initialEpisodeIndex.current] || "";
+      const currentTitle = videoDetail?.episodes_titles?.[initialEpisodeIndex.current] || `第${initialEpisodeIndex.current + 1}集`;
 
       artPlayerRef.current = new Artplayer({
         container: artRef.current,
@@ -361,7 +415,7 @@ export default function PlayerPage() {
         // 弹幕插件
         plugins: [
           artplayerPluginDanmuku({
-            danmuku: createDanmakuLoader(danmakuSources, videoDetail.douban_id, currentTitle, initialEpisodeIndex, videoDetail.episodes?.length === 1),
+            danmuku: createDanmakuLoader(danmakuSources, videoDetail.douban_id, currentTitle, initialEpisodeIndex.current, videoDetail.episodes?.length === 1),
             speed: 7.5,
             opacity: 1,
             fontSize: 23,
@@ -382,22 +436,17 @@ export default function PlayerPage() {
           artplayerPluginLiquidGlass(),
         ],
 
-        // HLS 支持配置
+        // HLS 支持配置（强制使用 HLS.js 以支持去广告功能）
         customType: {
           m3u8: function (video, url) {
-            if (video.canPlayType("application/vnd.apple.mpegurl") || video.canPlayType("application/x-mpegurl")) {
-              console.log("使用原生 HLS 播放");
-              video.src = url;
-              return;
-            }
-
+            // 优先使用 HLS.js（支持去广告），只有在 HLS.js 不支持时才降级到原生播放
             if (!Hls || !Hls.isSupported()) {
-              console.warn("HLS.js 不支持，尝试原生播放");
+              console.warn("HLS.js 不支持，降级到原生播放（去广告功能不可用）");
               video.src = url;
               return;
             }
 
-            console.log("使用 HLS.js 播放");
+            console.log("使用 HLS.js 播放（去广告功能已启用）");
 
             if (video.hls) {
               video.hls.destroy();
@@ -410,7 +459,7 @@ export default function PlayerPage() {
               maxBufferLength: 30,
               backBufferLength: 30,
               maxBufferSize: 60 * 1000 * 1000,
-              loader: blockAdEnabled ? CustomHlsJsLoader : Hls.DefaultConfig.loader,
+              loader: blockAdEnabledRef.current ? CustomHlsJsLoader : Hls.DefaultConfig.loader,
             });
 
             hls.loadSource(url);
@@ -451,7 +500,7 @@ export default function PlayerPage() {
             switch: blockAdEnabled,
             onSwitch: function (item) {
               const newVal = !item.switch;
-              setBlockAdEnabled(newVal);
+              useSettingsStore.getState().setBlockAdEnabled(newVal);
               if (artPlayerRef.current) {
                 artPlayerRef.current.notice.show = newVal ? "去广告已开启，刷新生效" : "去广告已关闭，刷新生效";
               }
@@ -463,11 +512,13 @@ export default function PlayerPage() {
             tooltip: skipConfig.enable ? "已开启" : "已关闭",
             switch: skipConfig.enable,
             onSwitch: function (item) {
+              // 使用 getState() 获取最新的 skipConfig，避免闭包捕获旧值
+              const currentSkipConfig = useSettingsStore.getState().skipConfig;
               const newConfig = {
-                ...skipConfig,
+                ...currentSkipConfig,
                 enable: !item.switch,
               };
-              setSkipConfig(newConfig);
+              useSettingsStore.getState().setSkipConfig(newConfig);
               if (artPlayerRef.current) {
                 artPlayerRef.current.notice.show = newConfig.enable ? "跳过片头片尾已开启" : "跳过片头片尾已关闭";
               }
@@ -482,11 +533,13 @@ export default function PlayerPage() {
               if (artPlayerRef.current) {
                 const currentTime = artPlayerRef.current.currentTime || 0;
                 if (currentTime > 0) {
+                  // 使用 getState() 获取最新的 skipConfig，避免闭包捕获旧值
+                  const currentSkipConfig = useSettingsStore.getState().skipConfig;
                   const newConfig = {
-                    ...skipConfig,
+                    ...currentSkipConfig,
                     intro_time: currentTime,
                   };
-                  setSkipConfig(newConfig);
+                  useSettingsStore.getState().setSkipConfig(newConfig);
                   artPlayerRef.current.notice.show = `片头已设置：${formatTime(currentTime)}`;
                   return `片头：${formatTime(currentTime)}`;
                 }
@@ -501,11 +554,13 @@ export default function PlayerPage() {
               if (artPlayerRef.current) {
                 const outroTime = -(artPlayerRef.current.duration - artPlayerRef.current.currentTime) || 0;
                 if (outroTime < 0) {
+                  // 使用 getState() 获取最新的 skipConfig，避免闭包捕获旧值
+                  const currentSkipConfig = useSettingsStore.getState().skipConfig;
                   const newConfig = {
-                    ...skipConfig,
+                    ...currentSkipConfig,
                     outro_time: outroTime,
                   };
-                  setSkipConfig(newConfig);
+                  useSettingsStore.getState().setSkipConfig(newConfig);
                   artPlayerRef.current.notice.show = `片尾已设置：${formatTime(-outroTime)}`;
                   return `片尾：${formatTime(-outroTime)}`;
                 }
@@ -517,7 +572,7 @@ export default function PlayerPage() {
             icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 18L18 6M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
             onClick: function () {
               const newConfig = { enable: false, intro_time: 0, outro_time: 0 };
-              setSkipConfig(newConfig);
+              useSettingsStore.getState().setSkipConfig(newConfig);
               if (artPlayerRef.current) {
                 artPlayerRef.current.notice.show = "跳过配置已清除";
               }
@@ -549,10 +604,10 @@ export default function PlayerPage() {
 
       // 视频可播放时恢复初始进度（仅首次）
       artPlayerRef.current.once("video:canplay", () => {
-        if (initialTime > 0) {
+        if (initialTime.current > 0) {
           try {
             const duration = artPlayerRef.current.duration || 0;
-            let target = initialTime;
+            let target = initialTime.current;
             if (duration && target >= duration - 2) {
               target = Math.max(0, duration - 5);
             }
@@ -603,7 +658,7 @@ export default function PlayerPage() {
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // 仅在挂载时执行一次
+  }, [videoDetail, loading]); // 当 DOM 容器挂载且 videoDetail 加载完成后初始化播放器
 
   // -------------------------------------------------------------------------
   // 键盘快捷键监听
@@ -636,18 +691,18 @@ export default function PlayerPage() {
   // -------------------------------------------------------------------------
   // 渲染
   // -------------------------------------------------------------------------
-  if (!id || !source) {
+  if (error || !id || !source || !videoDetail) {
     return (
       <div className="w-full max-w-7xl pt-4 flex items-center justify-center min-h-screen">
         <div className="flex flex-col items-center gap-4">
-          <span className="material-symbols-outlined text-6xl text-gray-300">error</span>
-          <p className="text-gray-500">缺少必要的参数</p>
-          <Link href="/" className="text-primary hover:underline">
-            返回首页
-          </Link>
+          <div className="animate-spin rounded-full h-16 w-16 border-4 border-primary border-t-transparent"></div>
+          <p className="text-gray-500">加载中...</p>
         </div>
       </div>
     );
+  }
+  if (loading) {
+    return <LoadingSpinner />;
   }
   return (
     <div className="w-full max-w-7xl pt-4 px-4">
