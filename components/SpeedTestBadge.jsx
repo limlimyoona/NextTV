@@ -113,21 +113,19 @@ export function SpeedTestBadge({ videoId, sourceKey, sourceUrl }) {
       speedText = `${speedBps} B/s`;
   }
 
-  // Color coding based on speed
-  // > 5MB/s (5 * 1024 * 1024) or < 200ms
-  // > 1MB/s or < 800ms
-  let colorClass = "bg-red-500/70";
-  const speedMb = speedBps / 1048576;
+  // Color coding based on latency only
+  let colorClass = "bg-red-500/70 text-white";
+  const latency = result.responseTime || 9999;
   
-  if (speedMb > 5 || (result.responseTime && result.responseTime < 200)) {
-    colorClass = "bg-green-500/70";
-  } else if (speedMb > 1 || (result.responseTime && result.responseTime < 800)) {
+  if (latency < 600) {
+    colorClass = "bg-green-500/70 text-white";
+  } else if (latency <= 1000) {
     colorClass = "bg-yellow-500/70 text-black";
   }
 
   return (
     <div className="absolute top-2 left-2 z-10">
-      <div className={`${colorClass} text-white shadow-sm backdrop-blur-md rounded-md px-2 py-1 flex flex-col items-start gap-0.5 min-w-[50px]`}>
+      <div className={`${colorClass} shadow-sm backdrop-blur-md rounded-md px-2 py-1 flex flex-col items-start gap-0.5 min-w-[50px]`}>
          <span className="text-[10px] font-bold leading-none">{result.responseTime}ms</span>
          {speedText && (
             <span className="text-[9px] font-medium leading-none whitespace-nowrap opacity-90">
