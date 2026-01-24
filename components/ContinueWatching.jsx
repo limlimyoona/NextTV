@@ -39,7 +39,7 @@ export function ContinueWatching({ playHistory }) {
 
           try {
             const res = await fetch(
-              `/api/detail/upgrade?ids=${ids}&sourceUrl=${sourceConfig.url}`
+              `/api/upgrade?ids=${ids}&sourceUrl=${sourceConfig.url}`
             );
             const data = await res.json();
 

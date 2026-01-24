@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { unstable_cache } from "next/cache";
+import {NextResponse} from "next/server";
+import {unstable_cache} from "next/cache";
 
 function parseSingleVideo(videoDetail) {
   let episodes = [];
@@ -71,8 +71,8 @@ const checkVideoUpgrade = unstable_cache(
       throw error;
     }
   },
-  ["detail-upgrade"],
-  { revalidate: 3600, tags: ["upgrade"] },
+  ["upgrade-api"],
+  {revalidate: 3600, tags: ["upgrade"]},
 );
 
 export async function GET(request) {
